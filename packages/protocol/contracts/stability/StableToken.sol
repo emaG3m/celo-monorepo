@@ -19,6 +19,7 @@ import "../common/UsingPrecompiles.sol";
  */
 // solhint-disable-next-line max-line-length
 contract StableToken is
+  ICeloVersionedContract,
   Ownable,
   Initializable,
   UsingRegistry,
