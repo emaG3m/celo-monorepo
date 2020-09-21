@@ -4,13 +4,13 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "solidity-bytes-utils/contracts/BytesLib.sol";
 
 import "./interfaces/ICeloVersionedContract.sol";
-import "./interfaces/IMetaTransactionWallet.sol";
+// import "./interfaces/IMetaTransactionWallet.sol";
 import "./ExternalCall.sol";
 import "./Initializable.sol";
 import "./Signatures.sol";
 
 contract MetaTransactionWallet is
-  IMetaTransactionWallet,
+  // IMetaTransactionWallet,
   ICeloVersionedContract,
   Initializable,
   Ownable
@@ -26,6 +26,7 @@ contract MetaTransactionWallet is
   );
   uint256 public nonce;
   address public signer;
+  bytes executeTransactionsReturnValues;
 
   event SignerSet(address indexed signer);
   event EIP712DomainSeparatorSet(bytes32 eip712DomainSeparator);
@@ -209,23 +210,35 @@ contract MetaTransactionWallet is
    * @param values The CELO value to be sent with each transaction.
    * @param data The concatenated data to be sent in each transaction.
    * @param dataLengths The length of each transaction's data.
+   * @return The 
    */
   function executeTransactions(
     address[] calldata destinations,
     uint256[] calldata values,
     bytes calldata data,
     uint256[] calldata dataLengths
-  ) external {
+  ) external returns (bytes memory, uint256[] memory) {
     require(
       destinations.length == values.length && values.length == dataLengths.length,
       "Input arrays must be same length"
     );
+
+    bytes memory returnValues;
+    uint256[] memory returnLengths = new uint256[](destinations.length);
     uint256 dataPosition = 0;
     for (uint256 i = 0; i < destinations.length; i = i.add(1)) {
-      executeTransaction(destinations[i], values[i], sliceData(data, dataPosition, dataLengths[i]));
+      bytes memory returnVal = executeTransaction(
+        destinations[i],
+        values[i],
+        sliceData(data, dataPosition, dataLengths[i])
+      );
+      returnValues = abi.encodePacked(returnValues, returnVal);
+      returnLengths[i] = returnVal.length;
       dataPosition = dataPosition.add(dataLengths[i]);
     }
+
     require(dataPosition == data.length, "data cannot have extra bytes appended");
+    return (returnValues, returnLengths);
   }
 
   /**

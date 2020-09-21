@@ -207,7 +207,10 @@ contract('MetaTransactionWallet', (accounts: string[]) => {
 
       describe('when the caller is the signer', () => {
         beforeEach(async () => {
-          res = await wallet.executeTransaction(destination, value, data, { from: signer })
+          res = await wallet.getMetaTransactionDigest(destination, value, data, 11, {
+            from: signer,
+          })
+          console.log(res)
         })
 
         it('should execute the transaction', async () => {
@@ -250,7 +253,8 @@ contract('MetaTransactionWallet', (accounts: string[]) => {
           beforeEach(async () => {
             await web3.eth.sendTransaction({ from: accounts[0], to: wallet.address, value })
             // @ts-ignore
-            res = await wallet.executeTransaction(destination, value, data, { from: signer })
+            res = await wallet.executeTransaction.call(destination, value, data, { from: signer })
+            console.log(res)
           })
 
           it('should execute the transaction', async () => {
@@ -310,6 +314,20 @@ contract('MetaTransactionWallet', (accounts: string[]) => {
           value,
           data: '0x',
         })
+        // view owner (to test return values)
+        transactions.push({
+          destination: wallet.address,
+          value: 0,
+          // @ts-ignore
+          data: wallet.contract.methods.signer().encodeABI(),
+        })
+        // view isOwner (to test return values)
+        transactions.push({
+          destination: wallet.address,
+          value: 0,
+          // @ts-ignore
+          data: wallet.contract.methods.isOwner().encodeABI(),
+        })
         // Change signer
         transactions.push({
           destination: wallet.address,
@@ -320,30 +338,58 @@ contract('MetaTransactionWallet', (accounts: string[]) => {
         await web3.eth.sendTransaction({
           from: accounts[0],
           to: wallet.address,
-          value: value * 2,
+          value: value * 4,
         })
       })
 
       describe('when the caller is the signer', () => {
         describe('when the transactions are executed directly', () => {
-          beforeEach(async () => {
-            await wallet.executeTransactions(
+          describe('', () => {
+            beforeEach(async () => {
+              await wallet.executeTransactions(
+                transactions.map((t) => t.destination),
+                transactions.map((t) => t.value),
+                ensureLeading0x(transactions.map((t) => trimLeading0x(t.data)).join('')),
+                transactions.map((t) => trimLeading0x(t.data).length / 2),
+                { from: signer }
+              )
+            })
+
+            it('should execute the transactions', async () => {
+              assert.equal(await web3.eth.getBalance(transactions[0].destination), value)
+              assert.equal(await web3.eth.getBalance(transactions[2].destination), value)
+              assert.equal(await wallet.signer(), nonSigner)
+            })
+
+            it('should not increment the nonce', async () => {
+              assertEqualBN(await wallet.nonce(), 0)
+            })
+          })
+
+          it('returns the proper values', async () => {
+            const boolTrue: string = '01'
+            const signerAddrReturned: string = trimLeading0x(signer).toLowerCase()
+            const returnValues = await wallet.executeTransactions.call(
               transactions.map((t) => t.destination),
               transactions.map((t) => t.value),
               ensureLeading0x(transactions.map((t) => trimLeading0x(t.data)).join('')),
               transactions.map((t) => trimLeading0x(t.data).length / 2),
               { from: signer }
             )
-          })
 
-          it('should execute the transactions', async () => {
-            assert.equal(await web3.eth.getBalance(transactions[0].destination), value)
-            assert.equal(await web3.eth.getBalance(transactions[2].destination), value)
-            assert.equal(await wallet.signer(), nonSigner)
-          })
-
-          it('should not increment the nonce', async () => {
-            assertEqualBN(await wallet.nonce(), 0)
+            // return values are padded to equal 32 bytes
+            assert.equal(
+              returnValues[0],
+              `0x${signerAddrReturned.padStart(64, '0')}${boolTrue.padStart(64, '0')}`
+            )
+            for (let i in returnValues[1]) {
+              // tx's with index 3 and 4 have return values
+              if (parseInt(i) == 3 || parseInt(i) == 4) {
+                assert.equal(web3.utils.hexToNumber(returnValues[1][i]), 32)
+              } else {
+                assert.equal(web3.utils.hexToNumber(returnValues[1][i]), 0)
+              }
+            }
           })
         })
 
