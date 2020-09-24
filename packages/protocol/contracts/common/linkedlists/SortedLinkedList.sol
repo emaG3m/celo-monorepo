@@ -70,7 +70,7 @@ library SortedLinkedList {
     uint256 value,
     bytes32 lesserKey,
     bytes32 greaterKey
-  ) public {
+  ) internal {
     remove(list, key);
     insert(list, key, value, lesserKey, greaterKey);
   }
