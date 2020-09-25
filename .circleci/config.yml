@@ -96,8 +96,10 @@ commands:
       - run:
           name: Fail if there are vulnerabilities in packages
           command: |
-            /bin/bash -c 'yarn audit --groups dependencies --level high; [[ $? -ge 8 ]] && exit 1 || exit 0'
-
+            if [ -e ~/.tmp/yarn_deps_have_changed ]; then
+              echo "Dependencies changed, auditing vulnerabilities"
+              /bin/bash -c 'yarn audit --groups dependencies --level high; [[ $? -ge 8 ]] && exit 1 || exit 0'
+            fi
       # Workaround save_cache not supporting globbing for the paths key
       # see note in https://circleci.com/docs/2.0/caching/#basic-example-of-dependency-caching and https://ideas.circleci.com/ideas/CCI-I-239
       - run:
